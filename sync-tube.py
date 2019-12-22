@@ -156,6 +156,7 @@ def main(playlist, dest, keep, api_key, processes, threshold, verbose, dont_upda
 
     if not access(dest, W_OK):
         print(f'{ERROR} Cannot write to playlist directory. Aborting')
+        return
 
     print(f'{INFO} Getting local playlist information', end='', flush=True)
     local_files = list(get_local_playlist_files(dest))
