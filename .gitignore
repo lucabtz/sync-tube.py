@@ -1,0 +1,6 @@
+# Ignore virtual env
+venv/
+env/
+
+# Ignore .env file with API key
+.env
