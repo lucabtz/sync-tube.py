@@ -35,7 +35,7 @@ YOUTUBE_DL_OPTIONS = {
 # directory - path to the playlist
 #
 def get_local_playlist_files(directory):
-    for file in glob(join(directory, "*")):
+    for file in glob(join(directory, "*.mp3")):
         if isfile(file):
             yield basename(file)
 
