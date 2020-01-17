@@ -23,6 +23,8 @@ optional arguments:
                         number of processes to use when downloading. Default is cpu_count *
                         2 i.e. 16
   --dont-update         don't actually change files, just print changes that would be made
+  --thumbnail           embeds video thumbnail as coverart
+  --quality             Mp3 Quality in bitrate. Default 192 kbps
   --verbose             be verbose
 ```
 
@@ -34,7 +36,7 @@ You can specify the `--keep` flag if you want to keep files that have been remov
 `./sync-tube.py --playlist PLAYLISTA --dest FOLDER --keep` and `./sync-tube.py --playlist PLAYLISTB --dest FOLDER --keep`.
 
 sync-tube works by comparing video titles and filenames using the Levenshtein distance between strings. You may be able to change a little filenames without
-breaking sync-tube if you play around with the `--threshold` value, but I would not reccomend it.
+breaking sync-tube if you play around with the `--threshold` value, but I would not recommend it.
 
 ## Installation
 

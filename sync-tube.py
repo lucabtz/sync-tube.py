@@ -11,13 +11,21 @@ from os import access, chdir, getcwd, unlink, W_OK
 from os.path import basename, isfile, join
 from youtube_api import YouTubeDataAPI
 from youtube_dl import YoutubeDL
+from enum import Enum
 
 INFO = f'[{fg("green")}{attr("bold")}+{attr("reset")}]'
 ERROR = f'[{fg("red")}{attr("bold")}-{attr("reset")}]'
 
 THRESHOLD = 5
 PROCESSES = cpu_count() * 4
+QUALITY = 192
 
+class PostProcessor(Enum):
+    EXTRACT_AUDIO = 0
+    EMBED_THUMBNAIL = 1
+    FFMPEG_METADATA = 2
+    def __int__(self):
+        return self.value
 
 YOUTUBE_DL_OPTIONS = {
     'outtmpl': '%(title)s.%(ext)s',
@@ -25,8 +33,9 @@ YOUTUBE_DL_OPTIONS = {
     'postprocessors': [{
         'key': 'FFmpegExtractAudio',
         'preferredcodec': 'mp3',
-        'preferredquality': '192',
-    }]
+        'preferredquality': str(QUALITY),
+    }, 
+    {}, {}]
 }
 
 
@@ -151,12 +160,21 @@ def download_videos_pool(videos, processes, verbose):
 # keep     - keep music files that are not in the playlist
 # api_key  - youtube api key
 #
-def main(playlist, dest, keep, api_key, processes, threshold, verbose, dont_update):
+def main(playlist, dest, keep, api_key, processes, threshold, dont_update, thumbnail, quality, verbose):
     youtube = YouTubeDataAPI(api_key)
 
     if not access(dest, W_OK):
         print(f'{ERROR} Cannot write to playlist directory. Aborting')
         return
+
+    #Embed video thumnail as coverart
+    if thumbnail:
+        YOUTUBE_DL_OPTIONS['writethumbnail'] = True
+        YOUTUBE_DL_OPTIONS['postprocessors'][int(PostProcessor.EMBED_THUMBNAIL)]['key'] = 'EmbedThumbnail'
+        YOUTUBE_DL_OPTIONS['postprocessors'][int(PostProcessor.FFMPEG_METADATA)]['key'] = 'FFmpegMetadata'
+
+    if quality:
+        YOUTUBE_DL_OPTIONS['postprocessors'][int(PostProcessor.EXTRACT_AUDIO)]['preferredquality'] = str(quality)
 
     print(f'{INFO} Getting local playlist information', end='', flush=True)
     local_files = list(get_local_playlist_files(dest))
@@ -216,8 +234,10 @@ if __name__ == '__main__':
     optional_named_args.add_argument('--threshold', type=int, default=THRESHOLD, help=f'threshold distance for the string metric, if this distance is surpassed two strings are considered different. Default {THRESHOLD}')
     optional_named_args.add_argument('--processes', type=int, default=PROCESSES, help=f'number of processes to use when downloading. Default is cpu_count * 2 i.e. {PROCESSES}')
     optional_named_args.add_argument('--dont-update', default=False, action='store_true', help='don\'t actually change files, just print changes that would be made')
+    optional_named_args.add_argument('--thumbnail', default=False, action='store_true', help='embeds video thumbnail as coverart')
+    optional_named_args.add_argument('--quality', type=int, default=QUALITY, help=f'Mp3 Quality in bitrate. Default {QUALITY} kbps')
     optional_named_args.add_argument('--verbose', default=False, action='store_true', help='be verbose')
     args = parser.parse_args()
     env = Env()
     env.read_env()
-    main(args.playlist, args.dest, args.keep, env('YOUTUBE_KEY'), args.processes, args.threshold, args.dont_update, args.verbose)
+    main(args.playlist, args.dest, args.keep, env('YOUTUBE_KEY'), args.processes, args.threshold, args.dont_update, args.thumbnail, args.quality, args.verbose)
