@@ -2,7 +2,6 @@
 
 from argparse import ArgumentParser
 from colored import fg, attr
-from enum import Enum
 from environs import Env
 from glob import glob
 import Levenshtein
@@ -11,31 +10,24 @@ from multiprocessing import cpu_count, Pool
 from os import access, chdir, getcwd, unlink, W_OK
 from os.path import basename, isfile, join
 from youtube_api import YouTubeDataAPI
-from youtube_dl import YoutubeDL
+from youtube_dl import YoutubeDL, DownloadError
 
 INFO = f'[{fg("green")}{attr("bold")}+{attr("reset")}]'
 ERROR = f'[{fg("red")}{attr("bold")}-{attr("reset")}]'
 
+ISSUE_LINK = 'https://github.com/ekardnam/sync-tube.py/issues'
+
 THRESHOLD = 5
 PROCESSES = cpu_count() * 4
 QUALITY = 192
-
-class PostProcessor(Enum):
-    EXTRACT_AUDIO = 0
-    EMBED_THUMBNAIL = 1
-    FFMPEG_METADATA = 2
-    def __int__(self):
-        return self.value
 
 YOUTUBE_DL_OPTIONS = {
     'outtmpl': '%(title)s.%(ext)s',
     'format': 'bestaudio/best',
     'postprocessors': [{
         'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'mp3',
-        'preferredquality': str(QUALITY),
-    }, 
-    {}, {}]
+        'preferredcodec': 'mp3'
+    }]
 }
 
 
@@ -92,7 +84,7 @@ def string_in_list(string, str_list, threshold):
 #
 # get_videos_to_download - returns a list of videos to be downloaded
 # local_filenames - the local playlist filenames (with stripped extension)
-# remote_videos  - a list of the remote playlist videos
+# remote_videos  - ancodingError: Error sending resu list of the remote playlist videos
 # threshold      - the threshold
 #
 def get_videos_to_download(local_filenames, remote_videos, threshold):
@@ -140,8 +132,10 @@ class YoutubeDLLogger(object):
 #
 def youtube_dl_download(url):
     with YoutubeDL(YOUTUBE_DL_OPTIONS) as ydl:
-        ydl.download([url])
-
+        try:
+            ydl.download([url])
+        except DownloadError as e:
+            print(f'{ERROR} An Exception as occured. Try updating YouTubeDL. If this happen again please report it at {ISSUE_LINK}')
 #
 # download_videos_pool - download videos in a process pool
 # videos    - the videos to download
@@ -170,14 +164,13 @@ def main(playlist, dest, keep, api_key, processes, threshold, dont_update, thumb
         print(f'{ERROR} Cannot write to playlist directory. Aborting')
         return
 
+    YOUTUBE_DL_OPTIONS['postprocessors'][0]['preferredquality'] = str(quality)
+
     #Embed video thumnail as coverart
     if thumbnail:
         YOUTUBE_DL_OPTIONS['writethumbnail'] = True
-        YOUTUBE_DL_OPTIONS['postprocessors'][int(PostProcessor.EMBED_THUMBNAIL)]['key'] = 'EmbedThumbnail'
-        YOUTUBE_DL_OPTIONS['postprocessors'][int(PostProcessor.FFMPEG_METADATA)]['key'] = 'FFmpegMetadata'
-
-    if quality:
-        YOUTUBE_DL_OPTIONS['postprocessors'][int(PostProcessor.EXTRACT_AUDIO)]['preferredquality'] = str(quality)
+        YOUTUBE_DL_OPTIONS['postprocessors'].append({'key': 'EmbedThumbnail'})
+        YOUTUBE_DL_OPTIONS['postprocessors'].append({'key': 'FFmpegMetadata'})
 
     print(f'{INFO} Getting local playlist information', end='', flush=True)
     local_files = list(get_local_playlist_files(dest))
