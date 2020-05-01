@@ -2,6 +2,7 @@
 
 from argparse import ArgumentParser
 from colored import fg, attr
+from enum import Enum
 from environs import Env
 from glob import glob
 import Levenshtein
@@ -11,7 +12,6 @@ from os import access, chdir, getcwd, unlink, W_OK
 from os.path import basename, isfile, join
 from youtube_api import YouTubeDataAPI
 from youtube_dl import YoutubeDL
-from enum import Enum
 
 INFO = f'[{fg("green")}{attr("bold")}+{attr("reset")}]'
 ERROR = f'[{fg("red")}{attr("bold")}-{attr("reset")}]'
@@ -155,10 +155,13 @@ def download_videos_pool(videos, processes, verbose):
 
 #
 # main
-# playlist - playlist id of the playlist to be synced
-# dest     - destination folder to sync
-# keep     - keep music files that are not in the playlist
-# api_key  - youtube api key
+# playlist    - playlist id of the playlist to be synced
+# dest        - destination folder to sync
+# keep        - keep music files that are not in the playlist
+# api_key     - youtube api key
+# dont_update - don't actually write the changes
+# thumbnail   - use thumbnails
+# quality     - audio bitrate
 #
 def main(playlist, dest, keep, api_key, processes, threshold, dont_update, thumbnail, quality, verbose):
     youtube = YouTubeDataAPI(api_key)
