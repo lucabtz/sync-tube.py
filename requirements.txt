@@ -2,4 +2,4 @@ colored==1.4.2
 environs==8.0.0
 python-Levenshtein==0.12.0
 youtube-data-api==0.0.20
-youtube_dl==2020.6.16.1
+youtube_dl==2021.2.4
