@@ -1,0 +1,31 @@
+version: 2
+updates:
+- package-ecosystem: pip
+  directory: "/"
+  schedule:
+    interval: daily
+    time: "04:00"
+  open-pull-requests-limit: 10
+  ignore:
+  - dependency-name: youtube-dl
+    versions:
+    - 2021.1.24.1
+    - 2021.2.10
+    - 2021.2.22
+    - 2021.2.4
+    - 2021.2.4.1
+    - 2021.3.14
+    - 2021.3.2
+    - 2021.3.25
+    - 2021.3.3
+    - 2021.3.31
+    - 2021.4.1
+    - 2021.4.17
+    - 2021.4.7
+  - dependency-name: environs
+    versions:
+    - 9.3.0
+    - 9.3.1
+  - dependency-name: python-levenshtein
+    versions:
+    - 0.12.1
