@@ -158,6 +158,7 @@ def download_videos_pool(videos, processes, verbose):
 # quality     - audio bitrate
 #
 def main(playlist, dest, keep, api_key, processes, threshold, dont_update, thumbnail, quality, verbose):
+    global YOUTUBE_DL_OPTIONS
     youtube = YouTubeDataAPI(api_key)
 
     if not access(dest, W_OK):
