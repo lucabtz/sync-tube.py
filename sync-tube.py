@@ -130,8 +130,8 @@ class YoutubeDLLogger(object):
 # youtube_dl_download - downloads the given video using youtube_dl
 # url - video url
 #
-def youtube_dl_download(url):
-    with YoutubeDL(YOUTUBE_DL_OPTIONS) as ydl:
+def youtube_dl_download(url, options):
+    with YoutubeDL(options) as ydl:
         try:
             ydl.download([url])
         except DownloadError as e:
@@ -142,10 +142,14 @@ def youtube_dl_download(url):
 # processes - how many processes to use
 #
 def download_videos_pool(videos, processes, verbose):
+    global YOUTUBE_DL_OPTIONS
+
     YOUTUBE_DL_OPTIONS['progress_hooks'] = [youtube_dl_hook]
     YOUTUBE_DL_OPTIONS['logger'] = YoutubeDLLogger(verbose)
+
     with Pool(processes=processes) as pool:
-        pool.map(youtube_dl_download, videos)
+        #Note: we have to pass YOUTUBE_DL_OPTIONS as an arg, because for some reason Windows doesn't see changes in the global var??
+        [pool.apply(youtube_dl_download, args = (url, YOUTUBE_DL_OPTIONS)) for url in videos]
 
 #
 # main
@@ -158,6 +162,8 @@ def download_videos_pool(videos, processes, verbose):
 # quality     - audio bitrate
 #
 def main(playlist, dest, keep, api_key, processes, threshold, dont_update, thumbnail, quality, verbose):
+    global YOUTUBE_DL_OPTIONS
+    
     youtube = YouTubeDataAPI(api_key)
 
     if not access(dest, W_OK):
