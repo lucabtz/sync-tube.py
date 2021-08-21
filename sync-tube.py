@@ -30,38 +30,17 @@ YOUTUBE_DL_OPTIONS = {
     }]
 }
 
-
-#
-# get_local_playlist_files - yields the files in the local playlist to be synced
-# directory - path to the playlist
-#
 def get_local_playlist_files(directory):
     for file in glob(join(directory, "*.mp3")):
         if isfile(file):
             yield basename(file)
 
-#
-# strip_extension - strips a file extension
-# example filename.test.txt gets mapped to filename.test
-# filename - the filename
-#
 def strip_extension(filename):
     return '.'.join(filename.split('.')[:-1])
 
-
-#
-# string_similarity_metric - returns how much two strings are similar in the Levenshtein metric
-# string1 - one string
-# string2 - another string
-#
 def string_similarity_metric(string1, string2):
     return Levenshtein.distance(string1, string2)
 
-#
-# best_distance_title_match_in_list - returns a tuple with distance and best match in the list
-# str   - the target string
-# str_list - the string list
-#
 def best_distance_title_match_in_list(str, str_list):
     record = inf
     record_str = ''
@@ -72,41 +51,18 @@ def best_distance_title_match_in_list(str, str_list):
             record_str = string
     return (record, record_str)
 
-#
-# string_in_list - checks if a string is in a list up to a threshold difference
-# string    - the string
-# str_list  - the list
-# threshold - the threshold
-#
 def string_in_list(string, str_list, threshold):
     return best_distance_title_match_in_list(string, str_list)[0] <= threshold
 
-#
-# get_videos_to_download - returns a list of videos to be downloaded
-# local_filenames - the local playlist filenames (with stripped extension)
-# remote_videos  - ancodingError: Error sending resu list of the remote playlist videos
-# threshold      - the threshold
-#
 def get_videos_to_download(local_filenames, remote_videos, threshold):
     return list(filter(lambda video: not string_in_list(video['video_title'], local_filenames, threshold), remote_videos))
 
-#
-# get_files_to_delete - returns a list of files that are no longer in the remote playlist
-# local_files    - a list of the local files in playlist (with extension)
-# remote_videos - a list of the remote_playlist videos
-# threshold     - the threshold
-#
 def get_files_to_delete(local_files, remote_videos, threshold):
     remote_video_titles = list(map(lambda v: v['video_title'], remote_videos))
     return list(filter(lambda file: not string_in_list(strip_extension(file), remote_video_titles, threshold), local_files))
 
-#
-# get_video_url_from_id - returns the video url from a given video id
-# id - video id
-#
 def get_video_url_from_id(id):
     return f'https://www.youtube.com/watch?v={id}'
-
 
 def youtube_dl_hook(d):
         if d['status'] == 'finished':
@@ -126,37 +82,19 @@ class YoutubeDLLogger(object):
     def error(self, msg):
         print(msg)
 
-#
-# youtube_dl_download - downloads the given video using youtube_dl
-# url - video url
-#
 def youtube_dl_download(url):
     with YoutubeDL(YOUTUBE_DL_OPTIONS) as ydl:
         try:
             ydl.download([url])
         except DownloadError as e:
             print(f'{ERROR} An Exception as occured. Try updating YouTubeDL. If this happen again please report it at {ISSUE_LINK}')
-#
-# download_videos_pool - download videos in a process pool
-# videos    - the videos to download
-# processes - how many processes to use
-#
+
 def download_videos_pool(videos, processes, verbose):
     YOUTUBE_DL_OPTIONS['progress_hooks'] = [youtube_dl_hook]
     YOUTUBE_DL_OPTIONS['logger'] = YoutubeDLLogger(verbose)
     with Pool(processes=processes) as pool:
         pool.map(youtube_dl_download, videos)
 
-#
-# main
-# playlist    - playlist id of the playlist to be synced
-# dest        - destination folder to sync
-# keep        - keep music files that are not in the playlist
-# api_key     - youtube api key
-# dont_update - don't actually write the changes
-# thumbnail   - use thumbnails
-# quality     - audio bitrate
-#
 def main(playlist, dest, keep, api_key, processes, threshold, dont_update, thumbnail, quality, verbose):
     global YOUTUBE_DL_OPTIONS
     youtube = YouTubeDataAPI(api_key)
