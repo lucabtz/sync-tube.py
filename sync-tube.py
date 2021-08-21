@@ -8,7 +8,7 @@ from math import inf
 from multiprocessing import cpu_count, Pool
 from os import access, chdir, getcwd, unlink, W_OK
 from os.path import basename, isfile, join
-from youtube_dl import YoutubeDL, DownloadError
+from youtube_dl import YoutubeDL, DownloadError, downloader
 
 INFO = f'[{fg("green")}{attr("bold")}+{attr("reset")}]'
 ERROR = f'[{fg("red")}{attr("bold")}-{attr("reset")}]'
@@ -18,15 +18,6 @@ ISSUE_LINK = 'https://github.com/ekardnam/sync-tube.py/issues'
 THRESHOLD = 5
 PROCESSES = cpu_count() * 2
 QUALITY = 192
-
-YOUTUBE_DL_OPTIONS = {
-    'outtmpl': '%(title)s.%(ext)s',
-    'format': 'bestaudio/best',
-    'postprocessors': [{
-        'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'mp3'
-    }]
-}
 
 def get_local_playlist_files(directory):
     for file in glob(join(directory, "*.mp3")):
@@ -85,34 +76,49 @@ class YoutubeDLLogger(object):
     def error(self, msg):
         print(msg)
 
-def youtube_dl_download(url):
-    with YoutubeDL(YOUTUBE_DL_OPTIONS) as ydl:
-        try:
-            ydl.download([url])
-        except DownloadError as e:
-            print(f'{ERROR} An Exception as occured. Try updating YouTubeDL. If this happen again please report it at {ISSUE_LINK}')
-            exit()
+class YoutubeDLDownloaderPool(object):
+    def __init__(self, processes, options):
+        self.processes = processes
+        self.options = options
 
-def download_videos_pool(videos, processes, verbose):
-    YOUTUBE_DL_OPTIONS['progress_hooks'] = [youtube_dl_hook]
-    YOUTUBE_DL_OPTIONS['logger'] = YoutubeDLLogger(verbose)
-    with Pool(processes=processes) as pool:
-        pool.map(youtube_dl_download, videos)
+    def download_video(self, video):
+        with YoutubeDL(self.options) as ydl:
+            try:
+                ydl.download([video])
+            except DownloadError as e:
+                print(e.exc_info)
+                print(f'{ERROR} An Exception as occured. Try updating YouTubeDL. If this happen again please report it at {ISSUE_LINK}')
+                exit()
+
+    def download(self, videos):
+        with Pool(processes=self.processes) as pool:
+            pool.map(self.download_video, videos)
 
 def main(playlist, dest, keep, processes, threshold, dont_update, thumbnail, quality, verbose):
-    global YOUTUBE_DL_OPTIONS
+    ydl_options = {
+        'outtmpl': '%(title)s.%(ext)s',
+        'format': 'bestaudio/best',
+        'logger': YoutubeDLLogger(verbose),
+        'progress_hooks': [youtube_dl_hook],
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3'
+        }]
+    }
 
     if not access(dest, W_OK):
         print(f'{ERROR} Cannot write to playlist directory. Aborting')
         return
 
-    YOUTUBE_DL_OPTIONS['postprocessors'][0]['preferredquality'] = str(quality)
+    ydl_options['postprocessors'][0]['preferredquality'] = str(quality)
 
     #Embed video thumnail as coverart
     if thumbnail:
-        YOUTUBE_DL_OPTIONS['writethumbnail'] = True
-        YOUTUBE_DL_OPTIONS['postprocessors'].append({'key': 'EmbedThumbnail'})
-        YOUTUBE_DL_OPTIONS['postprocessors'].append({'key': 'FFmpegMetadata'})
+        ydl_options['writethumbnail'] = True
+        ydl_options['postprocessors'].append({'key': 'EmbedThumbnail'})
+        ydl_options['postprocessors'].append({'key': 'FFmpegMetadata'})
+
+    downloader = YoutubeDLDownloaderPool(processes, ydl_options)
 
     print(f'{INFO} Getting local playlist information', end='', flush=True)
     local_files = list(get_local_playlist_files(dest))
@@ -137,7 +143,9 @@ def main(playlist, dest, keep, processes, threshold, dont_update, thumbnail, qua
         if not dont_update:
             cwd = getcwd()
             chdir(dest)
-            download_videos_pool(list(map(lambda video: get_video_url_from_id(video['id']), videos_to_download)), processes, verbose)
+            urls = list(map(lambda video: get_video_url_from_id(video['id']), videos_to_download))
+            print(urls)
+            downloader.download(urls)
             chdir(cwd)
         else:
             print('Not downloading. To download drop the --dont-update flag')
