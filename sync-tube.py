@@ -2,14 +2,12 @@
 
 from argparse import ArgumentParser
 from colored import fg, attr
-from environs import Env
 from glob import glob
 import Levenshtein
 from math import inf
 from multiprocessing import cpu_count, Pool
 from os import access, chdir, getcwd, unlink, W_OK
 from os.path import basename, isfile, join
-from youtube_api import YouTubeDataAPI
 from youtube_dl import YoutubeDL, DownloadError
 
 INFO = f'[{fg("green")}{attr("bold")}+{attr("reset")}]'
@@ -35,6 +33,11 @@ def get_local_playlist_files(directory):
         if isfile(file):
             yield basename(file)
 
+def get_remote_playlist_videos(playlist):
+    with YoutubeDL({'ignoreerrors': True, 'quiet': True}) as ydl:
+        playlist_info = ydl.extract_info(playlist, download=False)
+        return playlist_info['entries']
+
 def strip_extension(filename):
     return '.'.join(filename.split('.')[:-1])
 
@@ -55,10 +58,10 @@ def string_in_list(string, str_list, threshold):
     return best_distance_title_match_in_list(string, str_list)[0] <= threshold
 
 def get_videos_to_download(local_filenames, remote_videos, threshold):
-    return list(filter(lambda video: not string_in_list(video['video_title'], local_filenames, threshold), remote_videos))
+    return list(filter(lambda video: not string_in_list(video['title'], local_filenames, threshold), remote_videos))
 
 def get_files_to_delete(local_files, remote_videos, threshold):
-    remote_video_titles = list(map(lambda v: v['video_title'], remote_videos))
+    remote_video_titles = list(map(lambda v: v['title'], remote_videos))
     return list(filter(lambda file: not string_in_list(strip_extension(file), remote_video_titles, threshold), local_files))
 
 def get_video_url_from_id(id):
@@ -95,9 +98,8 @@ def download_videos_pool(videos, processes, verbose):
     with Pool(processes=processes) as pool:
         pool.map(youtube_dl_download, videos)
 
-def main(playlist, dest, keep, api_key, processes, threshold, dont_update, thumbnail, quality, verbose):
+def main(playlist, dest, keep, processes, threshold, dont_update, thumbnail, quality, verbose):
     global YOUTUBE_DL_OPTIONS
-    youtube = YouTubeDataAPI(api_key)
 
     if not access(dest, W_OK):
         print(f'{ERROR} Cannot write to playlist directory. Aborting')
@@ -120,21 +122,21 @@ def main(playlist, dest, keep, api_key, processes, threshold, dont_update, thumb
         print(' - \t{}'.format('\n - \t'.join(local_files_stripped)))
 
     print(f'{INFO} Pulling remote playlist information', end='', flush=True)
-    remote_videos = youtube.get_video_metadata(list(map(lambda v: v['video_id'], youtube.get_videos_from_playlist_id(playlist))))
+    remote_videos = get_remote_playlist_videos(playlist)
     print('. Done')
     if verbose:
         print(f'{INFO} Videos in remote playlist {playlist}:')
-        print(' - \t{}'.format('\n - \t'.join(map(lambda v: v['video_title'], remote_videos))))
+        print(' - \t{}'.format('\n - \t'.join(map(lambda v: v['title'], remote_videos))))
 
     videos_to_download = get_videos_to_download(local_files_stripped, remote_videos, threshold)
 
     if videos_to_download:
         print(f'{INFO} Have to download: ')
-        print(' - \t{}'.format('\n - \t'.join(map(lambda v: v['video_title'], videos_to_download))))
+        print(' - \t{}'.format('\n - \t'.join(map(lambda v: v['title'], videos_to_download))))
         if not dont_update:
             cwd = getcwd()
             chdir(dest)
-            download_videos_pool(list(map(lambda video: get_video_url_from_id(video['video_id']), videos_to_download)), processes, verbose)
+            download_videos_pool(list(map(lambda video: get_video_url_from_id(video['id']), videos_to_download)), processes, verbose)
             chdir(cwd)
         else:
             print('Not downloading. To download drop the --dont-update flag')
@@ -173,6 +175,4 @@ if __name__ == '__main__':
     optional_named_args.add_argument('--quality', type=int, default=QUALITY, help=f'Mp3 Quality in bitrate. Default {QUALITY} kbps')
     optional_named_args.add_argument('--verbose', default=False, action='store_true', help='be verbose')
     args = parser.parse_args()
-    env = Env()
-    env.read_env()
-    main(args.playlist, args.dest, args.keep, env('YOUTUBE_KEY'), args.processes, args.threshold, args.dont_update, args.thumbnail, args.quality, args.verbose)
+    main(args.playlist, args.dest, args.keep, args.processes, args.threshold, args.dont_update, args.thumbnail, args.quality, args.verbose)
