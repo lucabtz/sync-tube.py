@@ -144,7 +144,6 @@ def main(playlist, dest, keep, processes, threshold, dont_update, thumbnail, qua
             cwd = getcwd()
             chdir(dest)
             urls = list(map(lambda video: get_video_url_from_id(video['id']), videos_to_download))
-            print(urls)
             downloader.download(urls)
             chdir(cwd)
         else:
