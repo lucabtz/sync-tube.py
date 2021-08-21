@@ -40,5 +40,4 @@ breaking sync-tube if you play around with the `--threshold` value, but I would 
 
 ## Installation
 
-It's a single script, I would suggest installing dependencies in a Python virtualenv and running the script from there.
-You have to generate a YouTube Data API key from the Google Developer Console copy the file `.env.dist` into `.env` and paste your key there.
+It's a single script, I would suggest installing dependencies in a Python virtualenv and running the script from there. A working installation of FFMPEG required.

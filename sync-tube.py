@@ -16,7 +16,7 @@ ERROR = f'[{fg("red")}{attr("bold")}-{attr("reset")}]'
 ISSUE_LINK = 'https://github.com/ekardnam/sync-tube.py/issues'
 
 THRESHOLD = 5
-PROCESSES = cpu_count() * 4
+PROCESSES = cpu_count() * 2
 QUALITY = 192
 
 YOUTUBE_DL_OPTIONS = {
@@ -91,6 +91,7 @@ def youtube_dl_download(url):
             ydl.download([url])
         except DownloadError as e:
             print(f'{ERROR} An Exception as occured. Try updating YouTubeDL. If this happen again please report it at {ISSUE_LINK}')
+            exit()
 
 def download_videos_pool(videos, processes, verbose):
     YOUTUBE_DL_OPTIONS['progress_hooks'] = [youtube_dl_hook]
