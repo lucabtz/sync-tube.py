@@ -2,15 +2,13 @@
 
 from argparse import ArgumentParser
 from colored import fg, attr
-from environs import Env
 from glob import glob
 import Levenshtein
 from math import inf
 from multiprocessing import cpu_count, Pool
 from os import access, chdir, getcwd, unlink, W_OK
 from os.path import basename, isfile, join
-from youtube_api import YouTubeDataAPI
-from youtube_dl import YoutubeDL, DownloadError
+from youtube_dl import YoutubeDL, DownloadError, downloader
 
 INFO = f'[{fg("green")}{attr("bold")}+{attr("reset")}]'
 ERROR = f'[{fg("red")}{attr("bold")}-{attr("reset")}]'
@@ -18,50 +16,25 @@ ERROR = f'[{fg("red")}{attr("bold")}-{attr("reset")}]'
 ISSUE_LINK = 'https://github.com/ekardnam/sync-tube.py/issues'
 
 THRESHOLD = 5
-PROCESSES = cpu_count() * 4
+PROCESSES = cpu_count() * 2
 QUALITY = 192
 
-YOUTUBE_DL_OPTIONS = {
-    'outtmpl': '%(title)s.%(ext)s',
-    'format': 'bestaudio/best',
-    'postprocessors': [{
-        'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'mp3'
-    }]
-}
-
-
-#
-# get_local_playlist_files - yields the files in the local playlist to be synced
-# directory - path to the playlist
-#
 def get_local_playlist_files(directory):
     for file in glob(join(directory, "*.mp3")):
         if isfile(file):
             yield basename(file)
 
-#
-# strip_extension - strips a file extension
-# example filename.test.txt gets mapped to filename.test
-# filename - the filename
-#
+def get_remote_playlist_videos(playlist):
+    with YoutubeDL({'ignoreerrors': True, 'quiet': True}) as ydl:
+        playlist_info = ydl.extract_info(playlist, download=False)
+        return playlist_info['entries']
+
 def strip_extension(filename):
     return '.'.join(filename.split('.')[:-1])
 
-
-#
-# string_similarity_metric - returns how much two strings are similar in the Levenshtein metric
-# string1 - one string
-# string2 - another string
-#
 def string_similarity_metric(string1, string2):
     return Levenshtein.distance(string1, string2)
 
-#
-# best_distance_title_match_in_list - returns a tuple with distance and best match in the list
-# str   - the target string
-# str_list - the string list
-#
 def best_distance_title_match_in_list(str, str_list):
     record = inf
     record_str = ''
@@ -72,41 +45,18 @@ def best_distance_title_match_in_list(str, str_list):
             record_str = string
     return (record, record_str)
 
-#
-# string_in_list - checks if a string is in a list up to a threshold difference
-# string    - the string
-# str_list  - the list
-# threshold - the threshold
-#
 def string_in_list(string, str_list, threshold):
     return best_distance_title_match_in_list(string, str_list)[0] <= threshold
 
-#
-# get_videos_to_download - returns a list of videos to be downloaded
-# local_filenames - the local playlist filenames (with stripped extension)
-# remote_videos  - ancodingError: Error sending resu list of the remote playlist videos
-# threshold      - the threshold
-#
 def get_videos_to_download(local_filenames, remote_videos, threshold):
-    return list(filter(lambda video: not string_in_list(video['video_title'], local_filenames, threshold), remote_videos))
+    return list(filter(lambda video: not string_in_list(video['title'], local_filenames, threshold), remote_videos))
 
-#
-# get_files_to_delete - returns a list of files that are no longer in the remote playlist
-# local_files    - a list of the local files in playlist (with extension)
-# remote_videos - a list of the remote_playlist videos
-# threshold     - the threshold
-#
 def get_files_to_delete(local_files, remote_videos, threshold):
-    remote_video_titles = list(map(lambda v: v['video_title'], remote_videos))
+    remote_video_titles = list(map(lambda v: v['title'], remote_videos))
     return list(filter(lambda file: not string_in_list(strip_extension(file), remote_video_titles, threshold), local_files))
 
-#
-# get_video_url_from_id - returns the video url from a given video id
-# id - video id
-#
 def get_video_url_from_id(id):
     return f'https://www.youtube.com/watch?v={id}'
-
 
 def youtube_dl_hook(d):
         if d['status'] == 'finished':
@@ -126,57 +76,49 @@ class YoutubeDLLogger(object):
     def error(self, msg):
         print(msg)
 
-#
-# youtube_dl_download - downloads the given video using youtube_dl
-# url - video url
-#
-def youtube_dl_download(url, options):
-    with YoutubeDL(options) as ydl:
-        try:
-            ydl.download([url])
-        except DownloadError as e:
-            print(f'{ERROR} An Exception as occured. Try updating YouTubeDL. If this happen again please report it at {ISSUE_LINK}')
-#
-# download_videos_pool - download videos in a process pool
-# videos    - the videos to download
-# processes - how many processes to use
-#
-def download_videos_pool(videos, processes, verbose):
-    global YOUTUBE_DL_OPTIONS
+class YoutubeDLDownloaderPool(object):
+    def __init__(self, processes, options):
+        self.processes = processes
+        self.options = options
 
-    YOUTUBE_DL_OPTIONS['progress_hooks'] = [youtube_dl_hook]
-    YOUTUBE_DL_OPTIONS['logger'] = YoutubeDLLogger(verbose)
+    def download_video(self, video):
+        with YoutubeDL(self.options) as ydl:
+            try:
+                ydl.download([video])
+            except DownloadError as e:
+                print(e.exc_info)
+                print(f'{ERROR} An Exception as occured. Try updating YouTubeDL. If this happen again please report it at {ISSUE_LINK}')
+                exit()
 
-    with Pool(processes=processes) as pool:
-        #Note: we have to pass YOUTUBE_DL_OPTIONS as an arg, because for some reason Windows doesn't see changes in the global var??
-        [pool.apply(youtube_dl_download, args = (url, YOUTUBE_DL_OPTIONS)) for url in videos]
+    def download(self, videos):
+        with Pool(processes=self.processes) as pool:
+            pool.map(self.download_video, videos)
 
-#
-# main
-# playlist    - playlist id of the playlist to be synced
-# dest        - destination folder to sync
-# keep        - keep music files that are not in the playlist
-# api_key     - youtube api key
-# dont_update - don't actually write the changes
-# thumbnail   - use thumbnails
-# quality     - audio bitrate
-#
-def main(playlist, dest, keep, api_key, processes, threshold, dont_update, thumbnail, quality, verbose):
-    global YOUTUBE_DL_OPTIONS
-    
-    youtube = YouTubeDataAPI(api_key)
+def main(playlist, dest, keep, processes, threshold, dont_update, thumbnail, quality, verbose):
+    ydl_options = {
+        'outtmpl': '%(title)s.%(ext)s',
+        'format': 'bestaudio/best',
+        'logger': YoutubeDLLogger(verbose),
+        'progress_hooks': [youtube_dl_hook],
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3'
+        }]
+    }
 
     if not access(dest, W_OK):
         print(f'{ERROR} Cannot write to playlist directory. Aborting')
         return
 
-    YOUTUBE_DL_OPTIONS['postprocessors'][0]['preferredquality'] = str(quality)
+    ydl_options['postprocessors'][0]['preferredquality'] = str(quality)
 
     #Embed video thumnail as coverart
     if thumbnail:
-        YOUTUBE_DL_OPTIONS['writethumbnail'] = True
-        YOUTUBE_DL_OPTIONS['postprocessors'].append({'key': 'EmbedThumbnail'})
-        YOUTUBE_DL_OPTIONS['postprocessors'].append({'key': 'FFmpegMetadata'})
+        ydl_options['writethumbnail'] = True
+        ydl_options['postprocessors'].append({'key': 'EmbedThumbnail'})
+        ydl_options['postprocessors'].append({'key': 'FFmpegMetadata'})
+
+    downloader = YoutubeDLDownloaderPool(processes, ydl_options)
 
     print(f'{INFO} Getting local playlist information', end='', flush=True)
     local_files = list(get_local_playlist_files(dest))
@@ -187,21 +129,22 @@ def main(playlist, dest, keep, api_key, processes, threshold, dont_update, thumb
         print(' - \t{}'.format('\n - \t'.join(local_files_stripped)))
 
     print(f'{INFO} Pulling remote playlist information', end='', flush=True)
-    remote_videos = youtube.get_video_metadata(list(map(lambda v: v['video_id'], youtube.get_videos_from_playlist_id(playlist))))
+    remote_videos = get_remote_playlist_videos(playlist)
     print('. Done')
     if verbose:
         print(f'{INFO} Videos in remote playlist {playlist}:')
-        print(' - \t{}'.format('\n - \t'.join(map(lambda v: v['video_title'], remote_videos))))
+        print(' - \t{}'.format('\n - \t'.join(map(lambda v: v['title'], remote_videos))))
 
     videos_to_download = get_videos_to_download(local_files_stripped, remote_videos, threshold)
 
     if videos_to_download:
         print(f'{INFO} Have to download: ')
-        print(' - \t{}'.format('\n - \t'.join(map(lambda v: v['video_title'], videos_to_download))))
+        print(' - \t{}'.format('\n - \t'.join(map(lambda v: v['title'], videos_to_download))))
         if not dont_update:
             cwd = getcwd()
             chdir(dest)
-            download_videos_pool(list(map(lambda video: get_video_url_from_id(video['video_id']), videos_to_download)), processes, verbose)
+            urls = list(map(lambda video: get_video_url_from_id(video['id']), videos_to_download))
+            downloader.download(urls)
             chdir(cwd)
         else:
             print('Not downloading. To download drop the --dont-update flag')
@@ -240,6 +183,4 @@ if __name__ == '__main__':
     optional_named_args.add_argument('--quality', type=int, default=QUALITY, help=f'Mp3 Quality in bitrate. Default {QUALITY} kbps')
     optional_named_args.add_argument('--verbose', default=False, action='store_true', help='be verbose')
     args = parser.parse_args()
-    env = Env()
-    env.read_env()
-    main(args.playlist, args.dest, args.keep, env('YOUTUBE_KEY'), args.processes, args.threshold, args.dont_update, args.thumbnail, args.quality, args.verbose)
+    main(args.playlist, args.dest, args.keep, args.processes, args.threshold, args.dont_update, args.thumbnail, args.quality, args.verbose)
