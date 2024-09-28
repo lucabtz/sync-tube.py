@@ -30,7 +30,7 @@ optional arguments:
 
 To sync a playlist like `https://www.youtube.com/playlist?list=PLGuwvd-8KqjYGiJ1ota5WVf7u0np0V2-G` to your folder `~/Music` you would then do
 `./sync-tube.py --playlist PLGuwvd-8KqjYGiJ1ota5WVf7u0np0V2-G --dest ~/Music`, in this way sync-tube will download all files that are in the remote playlist,
-but are not in your local folder and delete all files in your folder that are no lenger in playlist.
+but are not in your local folder and delete all files in your folder that are no longer in playlist.
 
 You can specify the `--keep` flag if you want to keep files that have been removed from playlist, like if I want to sync two playlists to the same folder I would do
 `./sync-tube.py --playlist PLAYLISTA --dest FOLDER --keep` and `./sync-tube.py --playlist PLAYLISTB --dest FOLDER --keep`.
